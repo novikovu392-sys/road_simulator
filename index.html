@@ -74,8 +74,8 @@
     animation: bus-idle 0.15s infinite alternate;
   }
   @keyframes bus-idle {
-    from { transform: translateY(0) rotate(0deg); }
-    to { transform: translateY(-3px) rotate(1deg); }
+    from { transform: translateX(0) translateY(0) rotate(0deg); }
+    to { transform: translateX(-3px) translateY(-2px) rotate(1deg); }
   }
   .marshrutka {
     position: absolute;
@@ -93,6 +93,12 @@
     font-size: 4.5rem;
     pointer-events: none;
     z-index: 60;
+  }
+  .skater {
+    position: absolute;
+    font-size: 2.5rem;
+    pointer-events: none;
+    z-index: 58;
   }
   .smoke {
     position: absolute;
@@ -166,6 +172,28 @@
   button:active {
     transform: scale(0.92);
   }
+  .speed-control {
+    width: min(350px, 80vw);
+    margin: 0 0 18px;
+    padding: 12px 16px;
+    box-sizing: border-box;
+    background: #222;
+    border: 2px solid #555;
+    border-radius: 10px;
+  }
+  .speed-control label {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+    color: #ffcc00;
+    font-weight: bold;
+  }
+  #speedSlider {
+    width: 100%;
+    accent-color: #ffcc00;
+    cursor: pointer;
+  }
   
   #destroyScreen {
     display: none;
@@ -211,6 +239,14 @@
 
   <div id="shoutText">ГОЛДА!</div>
 
+  <div class="speed-control">
+    <label for="speedSlider">
+      <span>Скорость автобуса</span>
+      <span><span id="speedValue">80</span> км/ч</span>
+    </label>
+    <input id="speedSlider" type="range" min="0" max="500" step="5" value="80">
+  </div>
+
   <div class="progress-container">
     <div id="progressBar"></div>
   </div>
@@ -218,6 +254,7 @@
   <button onclick="shoutGold()">КРИЧАТЬ ГОЛДА</button>
   <button onclick="elDriftu()">ЭЛЬ ДРИФТУ</button>
   <button onclick="kamaz()">КАМАЗ</button>
+  <button onclick="skater()">СКЕЙТЕР</button>
   <button id="turboBtn" onclick="turbo()">ПРОЕХАТЬ ТУРБО</button>
 
   <div id="destroyScreen">
@@ -237,6 +274,14 @@
   const roadMarks = document.querySelectorAll('.road-mark');
   const busEl = document.getElementById('busEl');
   const busStopEl = document.getElementById('busStopEl');
+  const speedSlider = document.getElementById('speedSlider');
+  const speedValue = document.getElementById('speedValue');
+  let busSpeed = Number(speedSlider.value);
+
+  speedSlider.addEventListener('input', () => {
+    busSpeed = Number(speedSlider.value);
+    speedValue.textContent = busSpeed;
+  });
 
   let markPositions = [-50, 50, 150, 250, 350, 450];
   let idleTimer = 0;
@@ -262,7 +307,7 @@
   let stopCooldown = 300;
 
   function updateRoad() {
-    let speed = (isLeaving || isAtStop) ? 0 : (4 + level * 2.5);
+    let speed = (isLeaving || isAtStop) ? 0 : (busSpeed / 20) * (1 + level * 0.25);
 
     for(let i = 0; i < roadMarks.length; i++) {
       markPositions[i] += speed;
@@ -284,7 +329,7 @@
     }
 
     if (stopActive) {
-      stopX += 4 + level * 2.5;
+      stopX += (busSpeed / 20) * (1 + level * 0.25);
       busStopEl.style.left = stopX + 'px';
 
       // Когда остановка поравнялась с автобусом
@@ -685,6 +730,69 @@
     }, 30);
   }
 
+  function skater() {
+    resetActivity();
+    const s = document.createElement('div');
+    s.textContent = '🛹🧍‍♂️';
+    s.className = 'skater';
+    s.style.left = '-60px';
+    s.style.top = '75px';
+    document.querySelector('.road').appendChild(s);
+
+    let sLeft = -60;
+
+    const sInterval = setInterval(() => {
+      sLeft += 12;
+      s.style.left = sLeft + 'px';
+
+      if (!busCrashed && sLeft >= 340 && sLeft <= 400) {
+        clearInterval(sInterval);
+
+        try {
+          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.3);
+          gain.gain.setValueAtTime(1, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.3);
+        } catch(e) {}
+
+        let flyX = sLeft;
+        let flyY = 75;
+        let flyVx = -14 - Math.random() * 8;
+        let flyVy = -16 - Math.random() * 8;
+        let flyAngle = 0;
+
+        const flyInterval = setInterval(() => {
+          flyX += flyVx;
+          flyY += flyVy;
+          flyVy += 0.9;
+          flyAngle -= 25;
+          s.style.left = flyX + 'px';
+          s.style.top = flyY + 'px';
+          s.style.transform = `rotate(${flyAngle}deg)`;
+
+          if (flyY > 220 || flyX < -100) {
+            clearInterval(flyInterval);
+            s.remove();
+          }
+        }, 30);
+        return;
+      }
+
+      if (sLeft > 480) {
+        clearInterval(sInterval);
+        s.remove();
+      }
+    }, 30);
+  }
+
   function turbo() {
     resetActivity();
     const img = document.createElement('img');
@@ -718,11 +826,18 @@
     }, 30);
   }
 
+  let destroyIntervalId = null;
+
   function destroySite() {
     playSound('explosion');
     destroyScreen.style.display = 'flex';
     mainBody.style.backgroundColor = '#ff0000';
-    setInterval(() => {
+    if (destroyIntervalId) clearInterval(destroyIntervalId);
+    destroyIntervalId = setInterval(() => {
+      if (destroyScreen.style.display === 'none') {
+        clearInterval(destroyIntervalId);
+        return;
+      }
       const exp = document.createElement('div');
       exp.textContent = '💥';
       exp.style.position = 'absolute';
@@ -737,6 +852,9 @@
 
   function resetGame() {
     level = 0;
+    busSpeed = 80;
+    speedSlider.value = '80';
+    speedValue.textContent = '80';
     progressBar.style.width = '0%';
     shoutText.textContent = "ГОЛДА!";
     shoutText.style.transform = 'scale(1)';
@@ -755,6 +873,8 @@
     busEl.style.left = '';
     busEl.style.top = '';
     busEl.style.transform = '';
+    busEl.style.transition = '';
+    busEl.style.animation = 'bus-idle 0.15s infinite alternate';
     dayNightTimer = 0;
     isNight = false;
     document.querySelector('.road').style.backgroundColor = '#2a2a2a';
@@ -763,6 +883,7 @@
     headlightBeam.style.width = '0px';
 
     destroyScreen.style.display = 'none';
+    if (destroyIntervalId) clearInterval(destroyIntervalId);
     mainBody.style.backgroundColor = '#111';
     const road = document.querySelector('.road');
     road.style.boxShadow = 'none';
