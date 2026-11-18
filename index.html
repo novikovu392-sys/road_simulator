@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Симулятор дороги: ГОЛДА</title>
+<style>
+  body {
+    background-color: #111;
+    color: #fff;
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+    text-align: center;
+    transition: background-color 0.1s;
+  }
+  .road {
+    width: 450px;
+    height: 220px;
+    background: #2a2a2a;
+    border: 10px solid #555;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: inset 0 0 80px rgba(0,0,0,0.9);
+    touch-action: none;
+    transition: background-color 1s;
+  }
+  .headlight-beam {
+    position: absolute;
+    top: 50%;
+    right: 90px;
+    height: 25px;
+    background: linear-gradient(90deg, rgba(255,255,200,0.8), rgba(255,255,200,0));
+    transform: translateY(-50%);
+    pointer-events: none;
+    z-index: 52;
+    opacity: 0;
+    transition: opacity 1s;
+    border-radius: 50% 0 0 50%;
+  }
+  .road-mark {
+    position: absolute;
+    top: 50%;
+    width: 40px;
+    height: 8px;
+    background: #ffd700;
+    margin-top: -4px;
+    opacity: 0.8;
+    border-radius: 2px;
+  }
+  .bus-stop {
+    position: absolute;
+    top: 10px;
+    font-size: 2rem;
+    z-index: 40;
+    pointer-events: none;
+  }
+  .bus {
+    position: absolute;
+    font-size: 4rem;
+    right: 40px;
+    top: 50%;
+    margin-top: -32px;
+    pointer-events: none;
+    z-index: 55;
+    transition: transform 0.1s linear;
+    animation: bus-idle 0.15s infinite alternate;
+  }
+  @keyframes bus-idle {
+    from { transform: translateY(0) rotate(0deg); }
+    to { transform: translateY(-3px) rotate(1deg); }
+  }
+  .marshrutka {
+    position: absolute;
+    font-size: 3.5rem;
+    animation: marshrutka-spin 0.15s linear infinite;
+    pointer-events: none;
+    z-index: 50;
+  }
+  @keyframes marshrutka-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  .kamaz {
+    position: absolute;
+    font-size: 4.5rem;
+    pointer-events: none;
+    z-index: 60;
+  }
+  .smoke {
+    position: absolute;
+    font-size: 2.5rem;
+    pointer-events: none;
+    z-index: 45;
+    animation: smoke-fade 0.8s forwards;
+  }
+  @keyframes smoke-fade {
+    0% { opacity: 0.8; transform: scale(0.5); }
+    100% { opacity: 0; transform: scale(1.5); }
+  }
+  @keyframes fadeOut {
+    0% { transform: scale(0.5); opacity: 1; }
+    100% { transform: scale(2); opacity: 0; }
+  }
+  h1 {
+    font-size: 2rem;
+    margin-bottom: 5px;
+    color: #ffcc00;
+  }
+  #shoutText {
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: #ff3b30;
+    margin-bottom: 20px;
+    min-height: 40px;
+  }
+  .progress-container {
+    width: 80%;
+    max-width: 350px;
+    background: #333;
+    border-radius: 10px;
+    overflow: hidden;
+    height: 25px;
+    border: 2px solid #555;
+    margin-bottom: 25px;
+  }
+  #progressBar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #ffcc00, #ff3b30);
+    transition: width 0.1s;
+  }
+  button {
+    background-color: #ffcc00;
+    color: #111;
+    border: none;
+    padding: 15px 35px;
+    font-size: 1.3rem;
+    font-weight: bold;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(255, 204, 0, 0.4);
+    transition: transform 0.1s;
+  }
+  #turboBtn {
+    display: none;
+    margin-top: 10px;
+    background-color: #ff0000;
+    color: #fff;
+  }
+  .turbo-img {
+    position: absolute;
+    width: 100px;
+    height: auto;
+    pointer-events: none;
+    z-index: 100;
+    filter: drop-shadow(0 0 10px #ff0000);
+  }
+  button:active {
+    transform: scale(0.92);
+  }
+  
+  #destroyScreen {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: #000;
+    z-index: 999;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  #destroyScreen h2 {
+    font-size: 3rem;
+    color: #ffcc00;
+    margin: 20px 0;
+  }
+  .shake {
+    animation: shake 0.15s infinite;
+  }
+  @keyframes shake {
+    0% { transform: translate(2px, 2px) rotate(0deg); }
+    50% { transform: translate(-2px, -3px) rotate(-2deg); }
+    100% { transform: translate(2px, -1px) rotate(2deg); }
+  }
+</style>
+</head>
+<body id="mainBody">
+
+  <h1>Симулятор дороги</h1>
+  <div class="road" id="roadContainer">
+    <div class="road-mark" style="left:-50px;"></div>
+    <div class="road-mark" style="left:50px;"></div>
+    <div class="road-mark" style="left:150px;"></div>
+    <div class="road-mark" style="left:250px;"></div>
+    <div class="road-mark" style="left:350px;"></div>
+    <div class="road-mark" style="left:450px;"></div>
+
+    <div class="bus-stop" id="busStopEl" style="left: -60px;">🚏</div>
+    <div class="headlight-beam" id="headlightBeam"></div>
+    <div class="bus" id="busEl">🚌</div>
+    <div id="explosions" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></div>
+  </div>
+
+  <div id="shoutText">ГОЛДА!</div>
+
+  <div class="progress-container">
+    <div id="progressBar"></div>
+  </div>
+
+  <button onclick="shoutGold()">КРИЧАТЬ ГОЛДА</button>
+  <button onclick="elDriftu()">ЭЛЬ ДРИФТУ</button>
+  <button onclick="kamaz()">КАМАЗ</button>
+  <button id="turboBtn" onclick="turbo()">ПРОЕХАТЬ ТУРБО</button>
+
+  <div id="destroyScreen">
+    <div style="font-size: 5rem;">💥🔥💣</div>
+    <h2 id="finalTitle">ВСЕ К ХУЯМ ПОЛЕТЕЛО</h2>
+    <p style="color: #aaa; margin-bottom: 20px;">АПОКАЛИПСИС НА ДОРОГЕ</p>
+    <button onclick="resetGame()">Начать сначала</button>
+  </div>
+
+<script>
+  let level = 0;
+  const maxLevel = 10;
+  const progressBar = document.getElementById('progressBar');
+  const shoutText = document.getElementById('shoutText');
+  const mainBody = document.getElementById('mainBody');
+  const destroyScreen = document.getElementById('destroyScreen');
+  const roadMarks = document.querySelectorAll('.road-mark');
+  const busEl = document.getElementById('busEl');
+  const busStopEl = document.getElementById('busStopEl');
+
+  let markPositions = [-50, 50, 150, 250, 350, 450];
+  let idleTimer = 0;
+  let dayNightTimer = 0;
+  let isNight = false;
+  const headlightBeam = document.getElementById('headlightBeam');
+  let isLeaving = false;
+  let busCrashed = false;
+  
+  let busFlying = false;
+  let busFlyX = 0;
+  let busFlyY = 0;
+  let busFlyVx = 0;
+  let busFlyVy = 0;
+  let busFlyAngle = 0;
+  let busFlyVangle = 0;
+
+  // Остановки
+  let stopX = -60;
+  let stopActive = false;
+  let isAtStop = false;
+  let stopTimer = 0;
+  let stopCooldown = 300;
+
+  function updateRoad() {
+    let speed = (isLeaving || isAtStop) ? 0 : (4 + level * 2.5);
+
+    for(let i = 0; i < roadMarks.length; i++) {
+      markPositions[i] += speed;
+      if(markPositions[i] > 480) {
+        markPositions[i] = -60;
+      }
+      roadMarks[i].style.left = markPositions[i] + 'px';
+    }
+
+    // Логика автобусной остановки
+    if (!stopActive && !isAtStop && !isLeaving && !busCrashed) {
+      stopCooldown--;
+      if (stopCooldown <= 0) {
+        stopActive = true;
+        stopX = -60;
+        busStopEl.style.left = stopX + 'px';
+        stopCooldown = 500 + Math.random() * 400;
+      }
+    }
+
+    if (stopActive) {
+      stopX += 4 + level * 2.5;
+      busStopEl.style.left = stopX + 'px';
+
+      // Когда остановка поравнялась с автобусом
+      if (stopX >= 350 && stopX <= 380) {
+        stopActive = false;
+        isAtStop = true;
+        stopTimer = 180; // строго 3 секунды (180 кадров)
+        shoutText.textContent = "АВТОБУС НА ОСТАНОВКЕ";
+        const stopVoice = new SpeechSynthesisUtterance("Остановка");
+        speechSynthesis.speak(stopVoice);
+      }
+
+      if (stopX > 480) {
+        stopActive = false;
+      }
+    }
+
+    if (isAtStop) {
+      stopTimer--;
+      if (stopTimer <= 0) {
+        isAtStop = false;
+        shoutText.textContent = "ГОЛДА!";
+        busStopEl.style.left = '-60px';
+      }
+    }
+
+    if (busFlying) {
+      busFlyX += busFlyVx;
+      busFlyY += busFlyVy;
+      busFlyAngle += busFlyVangle;
+      busEl.style.left = busFlyX + 'px';
+      busEl.style.top = busFlyY + 'px';
+      busEl.style.transform = `rotate(${busFlyAngle}deg)`;
+    }
+
+    // Смена дня и ночи каждые 30 секунд (1800 кадров)
+    dayNightTimer++;
+    if (dayNightTimer >= 1800) {
+      dayNightTimer = 0;
+      isNight = !isNight;
+      const road = document.querySelector('.road');
+      if (isNight) {
+        road.style.backgroundColor = '#0b0b1a';
+        mainBody.style.backgroundColor = '#05050a';
+        headlightBeam.style.opacity = '1';
+        headlightBeam.style.width = '180px';
+      } else {
+        road.style.backgroundColor = '#2a2a2a';
+        mainBody.style.backgroundColor = '#111';
+        headlightBeam.style.opacity = '0';
+        headlightBeam.style.width = '0px';
+      }
+    }
+
+    if(level >= 6) {
+      const road = document.querySelector('.road');
+      road.style.boxShadow = `0 0 ${level * 15}px #ff3b30, inset 0 0 50px rgba(255,59,48,0.4)`;
+      road.style.borderColor = '#ff3b30';
+      if(Math.random() < 0.08) {
+        const exp = document.createElement('div');
+        exp.textContent = '💥';
+        exp.style.position = 'absolute';
+        exp.style.left = Math.random() * 420 + 'px';
+        exp.style.top = Math.random() * 180 + 'px';
+        exp.style.fontSize = '2rem';
+        exp.style.animation = 'fadeOut 0.5s forwards';
+        document.getElementById('explosions').appendChild(exp);
+        setTimeout(() => exp.remove(), 500);
+      }
+    }
+    requestAnimationFrame(updateRoad);
+  }
+  requestAnimationFrame(updateRoad);
+
+  function startBusLeaving() {
+    isLeaving = true;
+    shoutText.textContent = "АВТОБУС УЕХАЛ ОТ СКУКИ!";
+    const leaveVoice = new SpeechSynthesisUtterance("Автобус уехал от скуки");
+    speechSynthesis.speak(leaveVoice);
+
+    let currentRight = 40;
+    const leaveInterval = setInterval(() => {
+      if (!isLeaving) {
+        clearInterval(leaveInterval);
+        return;
+      }
+      currentRight -= 10;
+      busEl.style.right = currentRight + 'px';
+      if (currentRight < -100) {
+        clearInterval(leaveInterval);
+        setTimeout(resetGame, 1500);
+      }
+    }, 30);
+  }
+
+  function resetActivity() {
+    idleTimer = 0;
+    if (isLeaving && !busCrashed) {
+      isLeaving = false;
+      busEl.style.right = '40px';
+      busEl.style.left = '';
+    }
+  }
+
+  function triggerBusCrash() {
+    if (busCrashed) return;
+    busCrashed = true;
+    isLeaving = true;
+    isAtStop = false;
+
+    busFlyX = 450 - 40 - 50;
+    busFlyY = 110 - 32;
+    busEl.style.right = '';
+    busEl.style.left = busFlyX + 'px';
+    busEl.style.top = busFlyY + 'px';
+
+    busFlying = true;
+    busFlyVx = -4 - Math.random() * 4;
+    busFlyVy = (Math.random() - 0.5) * 8;
+    busFlyAngle = 0;
+    busFlyVangle = 60 + Math.random() * 80; // бешеный дрифт
+
+    shoutText.textContent = "АВТОБУС ВЫЛЕТЕЛ ЗА ДОРОГУ!";
+    const crashVoice = new SpeechSynthesisUtterance("ЭЛЬ ДРИФТО" + "о".repeat(50));
+    crashVoice.rate = 0.3;
+    speechSynthesis.speak(crashVoice);
+
+        playSound('explosion');
+
+    for(let i = 0; i < 12; i++) {
+      const exp = document.createElement('div');
+      exp.textContent = i % 2 === 0 ? '🔥' : '💥';
+      exp.style.position = 'absolute';
+      exp.style.left = (busFlyX + (Math.random()*50 - 25)) + 'px';
+      exp.style.top = (busFlyY + (Math.random()*50 - 25)) + 'px';
+      exp.style.fontSize = (2 + Math.random() * 3) + 'rem';
+      exp.style.animation = 'fadeOut 0.8s forwards';
+      document.getElementById('explosions').appendChild(exp);
+      setTimeout(() => exp.remove(), 800);
+    }
+
+    // Огонь на самом автобусе при полёте
+    const busFire = document.createElement('div');
+    busFire.id = 'busFire';
+    busFire.textContent = '🔥';
+    busFire.style.position = 'absolute';
+    busFire.style.left = '-15px';
+    busFire.style.top = '-15px';
+    busFire.style.fontSize = '3rem';
+    busFire.style.pointerEvents = 'none';
+    busFire.style.zIndex = '200';
+    busEl.appendChild(busFire);
+
+    setTimeout(() => {
+      setTimeout(resetGame, 2000);
+    }, 500);
+  }
+
+  const shouts = [
+    "ГОЛДА!",
+    "ГОЛДА!!",
+    "ГОООЛДААА!!!",
+    "ГООООООЛДААААА!!!!",
+    "ГОООООООООЛДААААААА!!!!!",
+    "ГОООООООООООООЛДАААААААААА!!!!!!",
+    "ВСЕ НАХУЙ ВЗРЫВАЕТСЯ!",
+    "ДОРОГА К ХУЯМ ЛЕТИТ!",
+    "АПОКАЛИПСИС НА ДОРОГЕ ВСЕ В ЩЕБЕНЬ!",
+    "💀 ВСЕ К ХУЯМ ПОЛЕТЕЛО 💀"
+  ];
+
+  function playSound(type) {
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if(type === 'shout') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150 * Math.pow(1.3, level), audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
+      } else if(type === 'glass') {
+        const bufferSize = audioCtx.sampleRate * 0.4;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.value = 3000;
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+        noise.start();
+      } else if(type === 'explosion') {
+        const bufferSize = audioCtx.sampleRate * 1.0;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 400;
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.8, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1.0);
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+        noise.start();
+      }
+    } catch(e) {}
+  }
+
+  function shoutGold() {
+    resetActivity();
+    if (level >= maxLevel) return;
+
+    level++;
+    let percent = (level / maxLevel) * 100;
+    progressBar.style.width = percent + '%';
+
+    let textIdx = Math.min(level - 1, shouts.length - 1);
+    shoutText.textContent = shouts[textIdx];
+
+    const redShout = new SpeechSynthesisUtterance(shouts[textIdx]);
+    redShout.volume = 1;
+    redShout.rate = 1.2;
+    speechSynthesis.speak(redShout);
+
+    let scale = 1 + (level * 0.15);
+    shoutText.style.transform = `scale(${scale})`;
+
+    if (level >= 7) {
+      const driftSmoke = setInterval(() => {
+        const smoke = document.createElement('div');
+        smoke.textContent = '💨';
+        smoke.className = 'smoke';
+        smoke.style.left = (370 + Math.random() * 60 - 30) + 'px';
+        smoke.style.top = (78 + Math.random() * 60 - 30) + 'px';
+        document.querySelector('.road').appendChild(smoke);
+        setTimeout(() => smoke.remove(), 700);
+      }, 50);
+      setTimeout(() => clearInterval(driftSmoke), 3000);
+
+      busEl.style.transition = 'none';
+      busEl.style.animation = 'none';
+      let driftAngle = 0;
+      const driftSpin = setInterval(() => {
+        driftAngle += 30;
+        busEl.style.transform = `rotate(${driftAngle}deg)`;
+      }, 30);
+      setTimeout(() => clearInterval(driftSpin), 3000);
+    }
+
+    mainBody.classList.add('shake');
+    mainBody.style.backgroundColor = level > 7 ? '#400' : '#220';
+
+    playSound('shout');
+
+    const gold = new SpeechSynthesisUtterance('Голда́');
+    gold.volume = 1;
+    gold.rate = 1.5;
+    speechSynthesis.speak(gold);
+
+    const road = document.querySelector('.road');
+    road.style.boxShadow = `0 0 ${level * 10}px #ff3b30`;
+    road.style.borderColor = level > 5 ? '#ff3b30' : '#666';
+
+    if(level >= 4) {
+      playSound('glass');
+    }
+
+    for(let i = 0; i < level; i++) {
+      const exp = document.createElement('div');
+      exp.textContent = level >= 8 ? '🔥' : '💥';
+      exp.style.position = 'absolute';
+      exp.style.left = Math.random() * 400 + 'px';
+      exp.style.top = Math.random() * 180 + 'px';
+      exp.style.fontSize = (1.5 + level * 0.2) + 'rem';
+      exp.style.animation = 'fadeOut 0.6s forwards';
+      document.getElementById('explosions').appendChild(exp);
+      setTimeout(() => exp.remove(), 600);
+    }
+
+    if(level >= 8) {
+      playSound('explosion');
+    }
+
+    setTimeout(() => {
+      mainBody.classList.remove('shake');
+      mainBody.style.backgroundColor = '#111';
+    }, 150);
+
+    if (level >= maxLevel) {
+      setTimeout(destroySite, 400);
+    }
+  }
+
+  function elDriftu() {
+    resetActivity();
+    const drift = new SpeechSynthesisUtterance('ЭЛЬ ДРИФТО' + 'о'.repeat(40));
+    drift.volume = 1;
+    drift.rate = 0.4;
+    speechSynthesis.speak(drift);
+
+    const marshrutka = document.createElement('div');
+    marshrutka.textContent = '🚌';
+    marshrutka.className = 'marshrutka';
+    marshrutka.style.left = '-60px';
+    marshrutka.style.top = '80px';
+    document.querySelector('.road').appendChild(marshrutka);
+
+    let driftLeft = -60;
+    let driftAngle = 0;
+
+    const driftInterval = setInterval(() => {
+      driftLeft += 15;
+      driftAngle += 30;
+      marshrutka.style.left = driftLeft + 'px';
+      marshrutka.style.transform = `rotate(${driftAngle}deg)`;
+
+      if (!busCrashed && driftLeft >= 340 && driftLeft <= 400) {
+        triggerBusCrash();
+      }
+
+      if(Math.random() < 0.5) {
+        const smoke = document.createElement('div');
+        smoke.textContent = '💨';
+        smoke.className = 'smoke';
+        smoke.style.left = (driftLeft + Math.random() * 20) + 'px';
+        smoke.style.top = (70 + Math.random() * 20) + 'px';
+        document.querySelector('.road').appendChild(smoke);
+        setTimeout(() => smoke.remove(), 800);
+      }
+
+      if(driftLeft > 480) {
+        clearInterval(driftInterval);
+        marshrutka.remove();
+      }
+    }, 30);
+  }
+
+  let kamazCount = 0;
+
+  function kamaz() {
+    resetActivity();
+    kamazCount++;
+    if(kamazCount >= 5) {
+      document.getElementById('turboBtn').style.display = '';
+    }
+    const kamazVoice = new SpeechSynthesisUtterance('КАМАЗ летит вперёд');
+    kamazVoice.volume = 1;
+    kamazVoice.rate = 0.9;
+    speechSynthesis.speak(kamazVoice);
+
+    const k = document.createElement('div');
+    k.textContent = '🚛';
+    k.className = 'kamaz';
+    k.style.left = '-120px';
+    k.style.top = '60px';
+    document.querySelector('.road').appendChild(k);
+
+    let kLeft = -120;
+    let kTop = 60;
+    let kAngle = 0;
+
+    const kInterval = setInterval(() => {
+      kLeft += 18;
+      kTop += (Math.random() * 10 - 5);
+      kAngle += 15;
+
+      k.style.left = kLeft + 'px';
+      k.style.top = kTop + 'px';
+      k.style.transform = `rotate(${kAngle}deg)`;
+
+      if (!busCrashed && kLeft >= 340 && kLeft <= 400) {
+        triggerBusCrash();
+      }
+
+      if(kLeft > 480) {
+        clearInterval(kInterval);
+        k.remove();
+      }
+    }, 30);
+  }
+
+  function turbo() {
+    resetActivity();
+    const img = document.createElement('img');
+    img.src = 'https://i.ibb.co/HLYC17vZ/109-20261116080728.png';
+    img.className = 'turbo-img';
+    img.style.left = '-120px';
+    img.style.top = '60px';
+    document.querySelector('.road').appendChild(img);
+
+    let tLeft = -120;
+    let tTop = 60;
+    let tAngle = 0;
+
+    const tInterval = setInterval(() => {
+      tLeft += 25;
+      tTop += (Math.random() * 14 - 7);
+      tAngle += 20;
+
+      img.style.left = tLeft + 'px';
+      img.style.top = tTop + 'px';
+      img.style.transform = `rotate(${tAngle}deg)`;
+
+      if (!busCrashed && tLeft >= 340 && tLeft <= 400) {
+        triggerBusCrash();
+      }
+
+      if(tLeft > 480) {
+        clearInterval(tInterval);
+        img.remove();
+      }
+    }, 30);
+  }
+
+  function destroySite() {
+    playSound('explosion');
+    destroyScreen.style.display = 'flex';
+    mainBody.style.backgroundColor = '#ff0000';
+    setInterval(() => {
+      const exp = document.createElement('div');
+      exp.textContent = '💥';
+      exp.style.position = 'absolute';
+      exp.style.left = Math.random() * 100 + 'vw';
+      exp.style.top = Math.random() * 100 + 'vh';
+      exp.style.fontSize = (1 + Math.random() * 3) + 'rem';
+      exp.style.animation = 'fadeOut 0.4s forwards';
+      document.getElementById('explosions').appendChild(exp);
+      setTimeout(() => exp.remove(), 400);
+    }, 60);
+  }
+
+  function resetGame() {
+    level = 0;
+    progressBar.style.width = '0%';
+    shoutText.textContent = "ГОЛДА!";
+    shoutText.style.transform = 'scale(1)';
+    isLeaving = false;
+    busCrashed = false;
+    busFlying = false;
+    stopActive = false;
+    isAtStop = false;
+    stopTimer = 0;
+    stopX = -60;
+    stopCooldown = 300;
+    busStopEl.style.left = '-60px';
+    const fire = document.getElementById('busFire');
+    if (fire) fire.remove();
+    busEl.style.right = '40px';
+    busEl.style.left = '';
+    busEl.style.top = '';
+    busEl.style.transform = '';
+    dayNightTimer = 0;
+    isNight = false;
+    document.querySelector('.road').style.backgroundColor = '#2a2a2a';
+    mainBody.style.backgroundColor = '#111';
+    headlightBeam.style.opacity = '0';
+    headlightBeam.style.width = '0px';
+
+    destroyScreen.style.display = 'none';
+    mainBody.style.backgroundColor = '#111';
+    const road = document.querySelector('.road');
+    road.style.boxShadow = 'none';
+    road.style.borderColor = '#555';
+    document.getElementById('explosions').innerHTML = '';
+  }
+</script>
+
+</body>
+</html>
