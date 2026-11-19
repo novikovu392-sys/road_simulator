@@ -20,6 +20,36 @@
     text-align: center;
     transition: background-color 0.1s;
   }
+  .road-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+  }
+  .vertical-control {
+    display: none;
+    height: 220px;
+    width: 48px;
+    box-sizing: border-box;
+    padding: 8px 4px;
+    background: #222;
+    border: 2px solid #555;
+    border-radius: 10px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .vertical-control.active { display: flex; }
+  #busPositionSlider {
+    writing-mode: vertical-lr;
+    direction: rtl;
+    height: 165px;
+    width: 24px;
+    accent-color: #ffcc00;
+    cursor: pointer;
+    touch-action: none;
+  }
   .road {
     width: 450px;
     height: 220px;
@@ -317,6 +347,7 @@
 <body id="mainBody">
 
   <h1>Симулятор дороги</h1>
+  <div class="road-controls">
   <div class="road" id="roadContainer">
     <div class="road-mark" style="left:-50px;"></div>
     <div class="road-mark" style="left:50px;"></div>
@@ -331,6 +362,13 @@
     <div class="glass-crack" id="glassCrack">💥</div>
     <div id="explosions" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></div>
   </div>
+  <div class="vertical-control" id="verticalControl">
+    <span style="font-size:0.7rem;color:#ffcc00;writing-mode:vertical-rl;">АВТОБУС</span>
+    <input id="busPositionSlider" type="range" min="0" max="160" value="82" aria-label="Положение автобуса на дороге">
+    <span style="font-size:0.65rem;color:#aaa;">↕</span>
+  </div>
+  </div>
+  <button id="controlToggleBtn" onclick="toggleBusControl()" style="margin:0 0 14px;">ВКЛЮЧИТЬ УПРАВЛЕНИЕ</button>
 
   <div id="shoutText">ГОЛДА!</div>
 
@@ -377,6 +415,12 @@
   const speedSlider = document.getElementById('speedSlider');
   const speedValue = document.getElementById('speedValue');
   let busSpeed = Number(speedSlider.value);
+  const verticalControl = document.getElementById('verticalControl');
+  const busPositionSlider = document.getElementById('busPositionSlider');
+  const controlToggleBtn = document.getElementById('controlToggleBtn');
+  let busControlEnabled = false;
+  let busY = 78;
+  let obstacleSpawnTimer = 0;
   let tornadoActive = false;
   let earthquakeActive = false;
   let driftActive = false;
@@ -386,11 +430,47 @@
     speedValue.textContent = busSpeed;
   });
 
+  function toggleBusControl() {
+    busControlEnabled = !busControlEnabled;
+    if (!busControlEnabled) {
+      obstacleSpawnTimer = 0;
+      document.querySelectorAll('.stone').forEach(stone => stone.remove());
+    }
+    verticalControl.classList.toggle('active', busControlEnabled);
+    controlToggleBtn.textContent = busControlEnabled ? 'ВЫКЛЮЧИТЬ УПРАВЛЕНИЕ' : 'ВКЛЮЧИТЬ УПРАВЛЕНИЕ';
+    if (busControlEnabled && !busFlying) {
+      busEl.style.right = '40px';
+      busEl.style.left = '';
+      busEl.style.top = busY + 'px';
+      busEl.style.marginTop = '0';
+    } else if (!busFlying && !busCrashed) {
+      busEl.style.top = '50%';
+      busEl.style.marginTop = '-32px';
+    }
+    syncHeadlightPosition();
+  }
+
+  function syncHeadlightPosition() {
+    // Луч света следует за серединой автобуса.
+    headlightBeam.style.top = (busControlEnabled ? busY + 32 : 110) + 'px';
+  }
+
+  busPositionSlider.addEventListener('input', () => {
+    // Инвертируем шкалу: движение бегунка вверх поднимает автобус вверх.
+    busY = 160 - Number(busPositionSlider.value);
+    if (busControlEnabled && !busFlying && !busCrashed) {
+      busEl.style.top = busY + 'px';
+      busEl.style.marginTop = '0';
+      syncHeadlightPosition();
+    }
+  });
+
   let markPositions = [-50, 50, 150, 250, 350, 450];
   let idleTimer = 0;
   let dayNightTimer = 0;
   let isNight = false;
   const headlightBeam = document.getElementById('headlightBeam');
+  syncHeadlightPosition();
   let isLeaving = false;
   let busCrashed = false;
   let stoneHits = 0;
@@ -413,7 +493,40 @@
   let stopCooldown = 300;
 
   function updateRoad() {
+    if (busControlEnabled && !busFlying && !busCrashed) syncHeadlightPosition();
     let speed = (isAtStop || ((isLeaving || busCrashed) && !driftActive)) ? 0 : (busSpeed / 20) * (1 + level * 0.25);
+
+    // Камни появляются на разных участках дороги: при включённом управлении их можно объехать.
+    if (busControlEnabled && !busCrashed && !isAtStop && !isLeaving) {
+      obstacleSpawnTimer++;
+      if (obstacleSpawnTimer >= 105) {
+        obstacleSpawnTimer = 0;
+        const rock = document.createElement('div');
+        rock.className = 'stone';
+        rock.textContent = '🪨';
+        let rockX = -45;
+        const rockY = 8 + Math.floor(Math.random() * 5) * 38;
+        rock.style.left = rockX + 'px';
+        rock.style.top = rockY + 'px';
+        document.getElementById('roadContainer').appendChild(rock);
+        const rockTimer = setInterval(() => {
+          if (busCrashed || !busControlEnabled || !rock.isConnected) { clearInterval(rockTimer); rock.remove(); return; }
+          // Скорость камня пересчитывается на каждом шаге по текущей скорости автобуса.
+          const rockSpeed = Math.max(1, (busSpeed / 20) * (1 + level * 0.25));
+          rockX += rockSpeed;
+          rock.style.left = rockX + 'px';
+          const currentBusY = busY;
+          if (rockX >= 320 && rockX <= 370 && Math.abs((rockY + 16) - (currentBusY + 32)) < 42) {
+            clearInterval(rockTimer);
+            rock.remove();
+            registerRockHit();
+          } else if (rockX > 490) {
+            clearInterval(rockTimer);
+            rock.remove();
+          }
+        }, 30);
+      }
+    }
 
     for(let i = 0; i < roadMarks.length; i++) {
       markPositions[i] += speed;
@@ -437,9 +550,10 @@
     if (stopActive) {
       stopX += (busSpeed / 20) * (1 + level * 0.25);
       busStopEl.style.left = stopX + 'px';
+      if (busControlEnabled && stopX > 210 && stopX < 345) shoutText.textContent = 'ОСТАНОВКА! ПОДНИМИ АВТОБУС ВВЕРХ';
 
       // Когда остановка поравнялась с автобусом
-      if (stopX >= 350 && stopX <= 380) {
+      if (stopX >= 350 && stopX <= 380 && (!busControlEnabled || busY <= 48)) {
         stopActive = false;
         isAtStop = true;
         stopTimer = 180; // строго 3 секунды (180 кадров)
@@ -971,6 +1085,32 @@
     }, 30);
   }
 
+  function registerRockHit() {
+    if (busCrashed || destroyScreen.style.display === 'flex') return;
+    stoneHits++;
+    playSound('glass');
+    busEl.classList.add('shake');
+    setTimeout(() => busEl.classList.remove('shake'), 300);
+    const crack = document.getElementById('glassCrack');
+    if (crack) {
+      crack.style.opacity = Math.min(1, stoneHits * 0.2);
+      crack.textContent = '💥';
+      crack.style.transform = `translate(-50%, -50%) scale(${1 + stoneHits * 0.1})`;
+    }
+    shoutText.textContent = `КАМЕНЬ! ПОПАДАНИЕ ${stoneHits}/5`;
+    if (stoneHits >= 5) {
+      busCrashed = true;
+      isLeaving = false;
+      isAtStop = false;
+      busEl.style.animation = 'none';
+      busEl.style.transform = '';
+      destroyScreen.style.display = 'flex';
+      document.getElementById('finalTitle').textContent = 'СТЕКЛО БИТО!';
+      document.getElementById('finalMessage').textContent = 'СЛИШКОМ МНОГО ПОПАДАНИЙ КАМНЕЙ!';
+      playSound('explosion');
+    }
+  }
+
   function throwStone() {
     if (busCrashed || destroyScreen.style.display === 'flex') return;
 
@@ -1363,6 +1503,9 @@
     busEl.style.animation = 'bus-idle 0.15s infinite alternate';
     busEl.style.transform = '';
     busSpeed = 80;
+    busY = 78;
+    busPositionSlider.value = '78';
+    obstacleSpawnTimer = 0;
     speedSlider.value = '80';
     speedValue.textContent = '80';
     progressBar.style.width = '0%';
@@ -1384,7 +1527,8 @@
     if (fire) fire.remove();
     busEl.style.right = '40px';
     busEl.style.left = '';
-    busEl.style.top = '';
+    busEl.style.top = busControlEnabled ? busY + 'px' : '';
+    busEl.style.marginTop = busControlEnabled ? '0' : '-32px';
     busEl.style.transform = '';
     busEl.style.transition = '';
     busEl.style.animation = 'bus-idle 0.15s infinite alternate';
