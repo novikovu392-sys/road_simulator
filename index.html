@@ -195,6 +195,26 @@
     cursor: pointer;
   }
   
+
+  .airplane {
+    position: absolute;
+    left: -90px;
+    top: 35px;
+    z-index: 120;
+    font-size: 3.5rem;
+    pointer-events: none;
+    filter: drop-shadow(0 0 8px #8bdcff);
+    transform: rotate(45deg);
+  }
+  .road.shake { animation: shake 0.12s infinite; }
+  .plane-flash {
+    position: absolute;
+    z-index: 150;
+    font-size: 3rem;
+    pointer-events: none;
+    animation: fadeOut 0.8s forwards;
+  }
+
   #destroyScreen {
     display: none;
     position: fixed;
@@ -255,12 +275,13 @@
   <button onclick="elDriftu()">ЭЛЬ ДРИФТУ</button>
   <button onclick="kamaz()">КАМАЗ</button>
   <button onclick="skater()">СКЕЙТЕР</button>
+  <button onclick="airplane()">✈️ САМОЛЁТ</button>
   <button id="turboBtn" onclick="turbo()">ПРОЕХАТЬ ТУРБО</button>
 
   <div id="destroyScreen">
     <div style="font-size: 5rem;">💥🔥💣</div>
-    <h2 id="finalTitle">ВСЕ ПОЛЕТЕЛО</h2>
-    <p style="color: #aaa; margin-bottom: 20px;">АПОКАЛИПСИС НА ДОРОГЕ</p>
+    <h2 id="finalTitle">ГОЛДА ПРЕВЫШЕНА!</h2>
+    <p id="finalMessage" style="color: #aaa; margin-bottom: 20px;">ШКАЛА ГОЛДЫ ДОШЛА ДО МАКСИМУМА!</p>
     <button onclick="resetGame()">Начать сначала</button>
   </div>
 
@@ -826,9 +847,83 @@
     }, 30);
   }
 
+
+  // Самолёт: 70% — пролетает мимо, 30% — мультяшный игровой БАБАХ.
+  function airplane() {
+    if (busCrashed || isLeaving || destroyScreen.style.display === 'flex') return;
+
+    const road = document.querySelector('.road');
+    const plane = document.createElement('div');
+    plane.className = 'airplane';
+    plane.textContent = '✈️';
+    plane.style.top = (20 + Math.random() * 95) + 'px';
+    road.appendChild(plane);
+
+    shoutText.textContent = 'САМОЛЁТ ЛЕТИТ!';
+    const hitsBus = Math.random() < 0.30;
+    let x = -90;
+    let finished = false;
+
+    const flight = setInterval(() => {
+      x += 13;
+      plane.style.left = x + 'px';
+
+      // Самолёт проходит рядом с автобусом — только в игровой анимации.
+      if (hitsBus && !finished && x >= 330 && x <= 390) {
+        finished = true;
+        clearInterval(flight);
+        plane.remove();
+
+        shoutText.textContent = 'СУПЕР БАБАХ!!!';
+        playSound('explosion');
+
+        // Несколько волн мультяшных огня и вспышек вокруг автобуса.
+        road.classList.add('shake');
+        const boomEmojis = ['💥', '🔥', '💥', '🔥', '✨', '💣'];
+        let boomWave = 0;
+        const boomInterval = setInterval(() => {
+          for (let i = 0; i < 18; i++) {
+            const fx = document.createElement('div');
+            fx.className = 'plane-flash';
+            fx.textContent = boomEmojis[Math.floor(Math.random() * boomEmojis.length)];
+            fx.style.left = (300 + Math.random() * 150) + 'px';
+            fx.style.top = (15 + Math.random() * 175) + 'px';
+            fx.style.fontSize = (2 + Math.random() * 2.2) + 'rem';
+            road.appendChild(fx);
+            setTimeout(() => fx.remove(), 1000);
+          }
+          boomWave++;
+          if (boomWave >= 7) {
+            clearInterval(boomInterval);
+            road.classList.remove('shake');
+          }
+        }, 280);
+
+        // Показываем окно только после нескольких секунд эффектов.
+        setTimeout(() => {
+          destroyScreen.style.display = 'flex';
+          document.getElementById('finalTitle').textContent = 'СУПЕР БАБАХ!!!';
+          document.getElementById('finalMessage').textContent =
+            'САМОЛЁТ ПОПАЛ В АВТОБУС! НАЖМИ «НАЧАТЬ СНАЧАЛА».';
+        }, 2600);
+        return;
+      }
+
+      if (x > 520) {
+        clearInterval(flight);
+        plane.remove();
+        if (!hitsBus) {
+          shoutText.textContent = '70% — САМОЛЁТ ПРОЛЕТЕЛ МИМО!';
+        }
+      }
+    }, 30);
+  }
+
   let destroyIntervalId = null;
 
   function destroySite() {
+    document.getElementById('finalTitle').textContent = 'ГОЛДА ПРЕВЫШЕНА!';
+    document.getElementById('finalMessage').textContent = 'ШКАЛА ГОЛДЫ ДОШЛА ДО МАКСИМУМА!';
     playSound('explosion');
     destroyScreen.style.display = 'flex';
     mainBody.style.backgroundColor = '#ff0000';
@@ -883,6 +978,8 @@
     headlightBeam.style.width = '0px';
 
     destroyScreen.style.display = 'none';
+    document.getElementById('finalTitle').textContent = 'ГОЛДА ПРЕВЫШЕНА!';
+    document.getElementById('finalMessage').textContent = 'ШКАЛА ГОЛДЫ ДОШЛА ДО МАКСИМУМА!';
     if (destroyIntervalId) clearInterval(destroyIntervalId);
     mainBody.style.backgroundColor = '#111';
     const road = document.querySelector('.road');
