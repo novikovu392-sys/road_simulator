@@ -77,6 +77,12 @@
     from { transform: translateX(0) translateY(0) rotate(0deg); }
     to { transform: translateX(-3px) translateY(-2px) rotate(1deg); }
   }
+  @keyframes el-drift-fly {
+    0% { transform: translate(0, 0) rotate(0deg) scale(1.12); }
+    25% { transform: translate(90px, -28px) rotate(180deg) scale(1.18); }
+    60% { transform: translate(290px, -105px) rotate(540deg) scale(0.95); }
+    100% { transform: translate(590px, -190px) rotate(900deg) scale(0.72); }
+  }
   .marshrutka {
     position: absolute;
     font-size: 3.5rem;
@@ -99,6 +105,12 @@
     font-size: 2.5rem;
     pointer-events: none;
     z-index: 58;
+  }
+  .stone {
+    position: absolute;
+    font-size: 2rem;
+    pointer-events: none;
+    z-index: 59;
   }
   .smoke {
     position: absolute;
@@ -207,6 +219,17 @@
     transform: rotate(45deg);
   }
   .road.shake { animation: shake 0.12s infinite; }
+  .glass-crack {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 4rem;
+    pointer-events: none;
+    z-index: 60;
+    opacity: 0;
+    transition: opacity 0.3s, transform 0.3s;
+  }
   .plane-flash {
     position: absolute;
     z-index: 150;
@@ -238,6 +261,57 @@
     50% { transform: translate(-2px, -3px) rotate(-2deg); }
     100% { transform: translate(2px, -1px) rotate(2deg); }
   }
+  .tornado {
+    position: absolute;
+    top: 50%;
+    left: -80px;
+    transform: translateY(-50%);
+    font-size: 4.5rem;
+    z-index: 80;
+    pointer-events: none;
+    filter: drop-shadow(0 0 12px #9be7ff);
+    animation: tornado-spin 0.22s linear infinite;
+  }
+  @keyframes tornado-spin {
+    from { rotate: 0deg; }
+    to { rotate: 360deg; }
+  }
+  .earthquake-crack {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 5rem; z-index: 130; pointer-events: none;
+    filter: drop-shadow(0 0 12px #ffcc00);
+  }
+  #finalPopper {
+    display: none; font-size: 7rem; line-height: 1.1;
+    animation: popper-burst 0.75s cubic-bezier(.15,.8,.25,1.4) both;
+    filter: drop-shadow(0 0 18px #ffcc00);
+  }
+  @keyframes popper-burst {
+    0% { transform: scale(0) rotate(-35deg); opacity: 0; }
+    65% { transform: scale(1.35) rotate(12deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0); opacity: 1; }
+  }
+  .christmas-confetti {
+    position: fixed; top: -30px; z-index: 1200; pointer-events: none;
+    animation: confetti-fall 2.4s linear forwards;
+  }
+  @keyframes confetti-fall {
+    to { transform: translateY(110vh) rotate(900deg); opacity: 0; }
+  }
+  .ufo {
+    position: absolute;
+    font-size: 3rem;
+    pointer-events: none;
+    z-index: 100;
+    filter: drop-shadow(0 0 15px #00ffff);
+    animation: ufo-float 2s ease-in-out infinite;
+  }
+  @keyframes ufo-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
 </style>
 </head>
 <body id="mainBody">
@@ -254,6 +328,7 @@
     <div class="bus-stop" id="busStopEl" style="left: -60px;">🚏</div>
     <div class="headlight-beam" id="headlightBeam"></div>
     <div class="bus" id="busEl">🚌</div>
+    <div class="glass-crack" id="glassCrack">💥</div>
     <div id="explosions" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></div>
   </div>
 
@@ -272,13 +347,17 @@
   </div>
 
   <button onclick="shoutGold()">КРИЧАТЬ ГОЛДА</button>
-  <button onclick="elDriftu()">ЭЛЬ ДРИФТУ</button>
+  <button onclick="elDriftu()">ЖЁСТКИЙ ДРИФТ</button>
   <button onclick="kamaz()">КАМАЗ</button>
   <button onclick="skater()">СКЕЙТЕР</button>
+  <button onclick="throwStone()">КИНУТЬ КАМЕНЬ</button>
   <button onclick="airplane()">✈️ САМОЛЁТ</button>
+  <button onclick="babkalopkaTornado()">🌪️ БАБКЛОПКО ТОРНАДО</button>
+  <button onclick="earthquake()">🌍 ЗЕМЛЕТРЯСЕНИЕ</button>
   <button id="turboBtn" onclick="turbo()">ПРОЕХАТЬ ТУРБО</button>
 
   <div id="destroyScreen">
+    <div id="finalPopper">🎉</div>
     <div style="font-size: 5rem;">💥🔥💣</div>
     <h2 id="finalTitle">ГОЛДА ПРЕВЫШЕНА!</h2>
     <p id="finalMessage" style="color: #aaa; margin-bottom: 20px;">ШКАЛА ГОЛДЫ ДОШЛА ДО МАКСИМУМА!</p>
@@ -298,6 +377,9 @@
   const speedSlider = document.getElementById('speedSlider');
   const speedValue = document.getElementById('speedValue');
   let busSpeed = Number(speedSlider.value);
+  let tornadoActive = false;
+  let earthquakeActive = false;
+  let driftActive = false;
 
   speedSlider.addEventListener('input', () => {
     busSpeed = Number(speedSlider.value);
@@ -311,6 +393,8 @@
   const headlightBeam = document.getElementById('headlightBeam');
   let isLeaving = false;
   let busCrashed = false;
+  let stoneHits = 0;
+  let ufoTimer = 0;
   
   let busFlying = false;
   let busFlyX = 0;
@@ -328,7 +412,7 @@
   let stopCooldown = 300;
 
   function updateRoad() {
-    let speed = (isLeaving || isAtStop) ? 0 : (busSpeed / 20) * (1 + level * 0.25);
+    let speed = (isAtStop || ((isLeaving || busCrashed) && !driftActive)) ? 0 : (busSpeed / 20) * (1 + level * 0.25);
 
     for(let i = 0; i < roadMarks.length; i++) {
       markPositions[i] += speed;
@@ -402,6 +486,15 @@
         mainBody.style.backgroundColor = '#111';
         headlightBeam.style.opacity = '0';
         headlightBeam.style.width = '0px';
+      }
+    }
+
+    // Каждые 30 секунд попытка призвать НЛО (10% шанс)
+    ufoTimer++;
+    if (ufoTimer >= 1800) {
+      ufoTimer = 0;
+      if (Math.random() < 0.10) {
+        summonUfo();
       }
     }
 
@@ -664,47 +757,64 @@
   }
 
   function elDriftu() {
+    if (driftActive || busCrashed || isLeaving || destroyScreen.style.display === 'flex' || tornadoActive || earthquakeActive) return;
     resetActivity();
-    const drift = new SpeechSynthesisUtterance('ЭЛЬ ДРИФТО' + 'о'.repeat(40));
-    drift.volume = 1;
-    drift.rate = 0.4;
-    speechSynthesis.speak(drift);
+    driftActive = true;
+    busCrashed = true;
+    isLeaving = true;
+    busSpeed = 425;
+    speedValue.textContent = '425';
+    shoutText.textContent = 'ЖЁСТКИЙ ДРИФТ — 425 КМ/Ч!!!';
 
-    const marshrutka = document.createElement('div');
-    marshrutka.textContent = '🚌';
-    marshrutka.className = 'marshrutka';
-    marshrutka.style.left = '-60px';
-    marshrutka.style.top = '80px';
-    document.querySelector('.road').appendChild(marshrutka);
+    const driftVoice = new SpeechSynthesisUtterance('Жёсткий дрифт! Четыреста двадцать пять километров в час!');
+    driftVoice.volume = 1;
+    driftVoice.rate = 1.15;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(driftVoice);
 
-    let driftLeft = -60;
-    let driftAngle = 0;
-
+    busEl.style.animation = 'none';
+    busEl.style.transition = 'none';
+    let angle = 0;
+    let wobble = 0;
     const driftInterval = setInterval(() => {
-      driftLeft += 15;
-      driftAngle += 30;
-      marshrutka.style.left = driftLeft + 'px';
-      marshrutka.style.transform = `rotate(${driftAngle}deg)`;
-
-      if (!busCrashed && driftLeft >= 340 && driftLeft <= 400) {
-        triggerBusCrash();
-      }
-
-      if(Math.random() < 0.5) {
+      angle += 75;
+      wobble = wobble === 0 ? 16 : -wobble;
+      busEl.style.transform = `translate(${wobble}px, ${Math.sin(angle * Math.PI / 180) * 9}px) rotate(${angle}deg) scale(1.12)`;
+      if (Math.random() < 0.8) {
         const smoke = document.createElement('div');
-        smoke.textContent = '💨';
+        smoke.textContent = Math.random() < 0.5 ? '💨' : '✨';
         smoke.className = 'smoke';
-        smoke.style.left = (driftLeft + Math.random() * 20) + 'px';
-        smoke.style.top = (70 + Math.random() * 20) + 'px';
-        document.querySelector('.road').appendChild(smoke);
+        smoke.style.left = (330 + Math.random() * 65) + 'px';
+        smoke.style.top = (65 + Math.random() * 90) + 'px';
+        roadContainer.appendChild(smoke);
         setTimeout(() => smoke.remove(), 800);
       }
-
-      if(driftLeft > 480) {
-        clearInterval(driftInterval);
-        marshrutka.remove();
-      }
     }, 30);
+
+    // Через пять секунд автобус эффектно вылетает за край дороги.
+    setTimeout(() => {
+      clearInterval(driftInterval);
+      // Автобус остаётся видимым и эффектно вылетает за край дороги с вращением.
+      busEl.style.animation = 'el-drift-fly 1.4s cubic-bezier(.2,.75,.25,1) forwards';
+      busEl.style.transform = '';
+      roadContainer.classList.add('shake');
+      mainBody.classList.add('shake');
+      playSound('explosion');
+      shoutText.textContent = 'ЭЛЬДРИФТО!!!';
+
+      const endingVoice = new SpeechSynthesisUtterance('Эльдрифто!');
+      endingVoice.volume = 1;
+      endingVoice.rate = 0.9;
+      speechSynthesis.speak(endingVoice);
+
+      setTimeout(() => {
+        roadContainer.classList.remove('shake');
+        mainBody.classList.remove('shake');
+        document.getElementById('finalTitle').textContent = '🏁 ЭЛЬДРИФТО 🏁';
+        document.getElementById('finalMessage').textContent = 'АВТОБУС РАЗОГНАЛСЯ ДО 425 КМ/Ч, ЗАКРУТИЛСЯ И ЭФФЕКТНО ВЫЛЕТЕЛ С ДОРОГИ!';
+        destroyScreen.style.display = 'flex';
+      }, 1450);
+    }, 5000);
   }
 
   let kamazCount = 0;
@@ -814,6 +924,60 @@
     }, 30);
   }
 
+  function throwStone() {
+    if (busCrashed || destroyScreen.style.display === 'flex') return;
+
+    stoneHits++;
+    playSound('glass');
+
+    const stone = document.createElement('div');
+    stone.textContent = '🪨';
+    stone.className = 'stone';
+    stone.style.left = '-50px';
+    stone.style.top = '80px';
+    stone.style.fontSize = '2.5rem';
+    document.querySelector('.road').appendChild(stone);
+
+    let sLeft = -50;
+    const sInterval = setInterval(() => {
+      sLeft += 30;
+      stone.style.left = sLeft + 'px';
+
+      if (sLeft >= 320 && sLeft <= 420) {
+        clearInterval(sInterval);
+        stone.remove();
+
+        busEl.classList.add('shake');
+        setTimeout(() => busEl.classList.remove('shake'), 300);
+
+        const crack = document.getElementById('glassCrack');
+        if (crack) {
+          crack.style.opacity = Math.min(1, stoneHits * 0.2);
+          crack.textContent = '💥';
+          crack.style.transform = `translate(-50%, -50%) scale(${1 + stoneHits * 0.1})`;
+        }
+
+        if (stoneHits >= 5) {
+          busCrashed = true;
+          isLeaving = false;
+          isAtStop = false;
+          busEl.style.animation = 'none';
+          busEl.style.transform = '';
+          destroyScreen.style.display = 'flex';
+          document.getElementById('finalTitle').textContent = 'СТЕКЛО БИТО!';
+          document.getElementById('finalMessage').textContent = 'СЕКРЕТ: стекло разбито. автобус стоит.';
+          playSound('explosion');
+        }
+        return;
+      }
+
+      if (sLeft > 480) {
+        clearInterval(sInterval);
+        stone.remove();
+      }
+    }, 30);
+  }
+
   function turbo() {
     resetActivity();
     const img = document.createElement('img');
@@ -849,6 +1013,197 @@
 
 
   // Самолёт: 70% — пролетает мимо, 30% — мультяшный игровой БАБАХ.
+  function babkalopkaTornado() {
+    if (tornadoActive || busCrashed || isLeaving || destroyScreen.style.display === 'flex') return;
+    tornadoActive = true;
+    shoutText.textContent = 'БАБКА-ЛОПКА ТОРНАДО!!!';
+    const voice = new SpeechSynthesisUtterance('Бабклопко торнадо!');
+    voice.rate = 0.85;
+    speechSynthesis.speak(voice);
+
+    const tornado = document.createElement('div');
+    tornado.className = 'tornado';
+    tornado.textContent = '🌪️';
+    roadContainer.appendChild(tornado);
+    let x = -75;
+    let tookBus = false;
+    const tornadoInterval = setInterval(() => {
+      x += 7;
+      tornado.style.left = x + 'px';
+
+      // Торнадо подхватывает автобус, когда доезжает до него.
+      if (!tookBus && x >= 325) {
+        tookBus = true;
+        busEl.style.display = 'none';
+        shoutText.textContent = 'АВТОБУС УНОСИТ ТОРНАДО!';
+        const pickupVoice = new SpeechSynthesisUtterance('Автобус унесло торнадо!');
+        speechSynthesis.speak(pickupVoice);
+        playSound('explosion');
+        for (let i = 0; i < 8; i++) {
+          const swirl = document.createElement('div');
+          swirl.textContent = i % 2 ? '💨' : '✨';
+          swirl.style.position = 'absolute';
+          swirl.style.left = (330 + Math.random() * 65) + 'px';
+          swirl.style.top = (65 + Math.random() * 90) + 'px';
+          swirl.style.fontSize = '1.8rem';
+          swirl.style.animation = 'fadeOut 0.7s forwards';
+          swirl.style.pointerEvents = 'none';
+          swirl.style.zIndex = '85';
+          roadContainer.appendChild(swirl);
+          setTimeout(() => swirl.remove(), 700);
+        }
+      }
+
+      if (x > 510) {
+        clearInterval(tornadoInterval);
+        tornado.remove();
+        tornadoActive = false;
+        document.getElementById('finalTitle').textContent = '🌪️ АВТОБУС УНЕСЛО ТОРНАДО 🌪️';
+        document.getElementById('finalMessage').textContent = 'БАБКА-ЛОПКА ТОРНАДО УНЕСЛА АВТОБУС ЗА ДОРОГУ!';
+        destroyScreen.style.display = 'flex';
+      }
+    }, 30);
+  }
+
+
+  // Землетрясение — сначала громкий мультяшный хлопок хлопушки, затем поздравление.
+  function christmasChime() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+
+      // Короткий резкий хлопок из шума и низкого удара.
+      const length = Math.floor(ctx.sampleRate * 0.22);
+      const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < length; i++) {
+        const fade = Math.pow(1 - i / length, 2.8);
+        data[i] = (Math.random() * 2 - 1) * fade;
+      }
+      const noise = ctx.createBufferSource();
+      noise.buffer = buffer;
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.0001, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.9, now + 0.008);
+      noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+      noise.connect(noiseGain);
+      noiseGain.connect(ctx.destination);
+      noise.start(now);
+
+      const boom = ctx.createOscillator();
+      const boomGain = ctx.createGain();
+      boom.type = 'sine';
+      boom.frequency.setValueAtTime(125, now);
+      boom.frequency.exponentialRampToValueAtTime(48, now + 0.18);
+      boomGain.gain.setValueAtTime(0.0001, now);
+      boomGain.gain.exponentialRampToValueAtTime(0.75, now + 0.01);
+      boomGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+      boom.connect(boomGain);
+      boomGain.connect(ctx.destination);
+      boom.start(now);
+      boom.stop(now + 0.21);
+
+      setTimeout(() => ctx.close(), 900);
+    } catch (e) {}
+
+    // Поздравление звучит после хлопка обычным системным голосом.
+    if ('speechSynthesis' in window) {
+      setTimeout(() => {
+        const greeting = new SpeechSynthesisUtterance('С Рождеством!');
+        speechSynthesis.speak(greeting);
+      }, 550);
+    }
+  }
+
+  function launchChristmasConfetti() {
+    const symbols = ['🎊', '✨', '⭐', '🎉', '❄️'];
+    for (let i = 0; i < 55; i++) {
+      const bit = document.createElement('div');
+      bit.className = 'christmas-confetti';
+      bit.textContent = symbols[Math.floor(Math.random() * symbols.length)];
+      bit.style.left = Math.random() * 100 + 'vw';
+      bit.style.animationDelay = (Math.random() * 0.8) + 's';
+      bit.style.fontSize = (1.2 + Math.random() * 1.8) + 'rem';
+      document.body.appendChild(bit);
+      setTimeout(() => bit.remove(), 3400);
+    }
+  }
+
+  function earthquake() {
+    if (earthquakeActive || busCrashed || isLeaving || destroyScreen.style.display === 'flex' || tornadoActive) return;
+    earthquakeActive = true;
+    resetActivity();
+    shoutText.textContent = 'ЗЕМЛЯ ТРЯСЁТСЯ!!!';
+    const voice = new SpeechSynthesisUtterance('Землетрясение! Держитесь!');
+    voice.lang = 'ru-RU'; voice.rate = 1.05;
+    speechSynthesis.speak(voice);
+
+    const road = document.querySelector('.road');
+    const crack = document.createElement('div');
+    crack.className = 'earthquake-crack';
+    crack.textContent = '〰️💥〰️';
+    road.appendChild(crack);
+    road.classList.add('shake');
+    mainBody.classList.add('shake');
+    busEl.style.animation = 'bus-idle 0.06s infinite alternate';
+    playSound('explosion');
+
+    let rumble = 0;
+    const rumbleTimer = setInterval(() => {
+      rumble++;
+      for (let i = 0; i < 3; i++) {
+        const dust = document.createElement('div');
+        dust.textContent = ['💨', '✨', '🪨'][Math.floor(Math.random() * 3)];
+        dust.style.position = 'absolute';
+        dust.style.left = (Math.random() * 420) + 'px';
+        dust.style.top = (Math.random() * 180) + 'px';
+        dust.style.fontSize = '1.5rem';
+        dust.style.zIndex = '140';
+        dust.style.animation = 'fadeOut 0.7s forwards';
+        road.appendChild(dust);
+        setTimeout(() => dust.remove(), 750);
+      }
+      if (rumble >= 8) {
+        clearInterval(rumbleTimer);
+        road.classList.remove('shake');
+        mainBody.classList.remove('shake');
+        crack.remove();
+        busEl.style.animation = 'bus-idle 0.15s infinite alternate';
+        document.getElementById('finalTitle').textContent = '🌍 ЗЕМЛЕТРЯСЕНИЕ! 🌍';
+        document.getElementById('finalMessage').textContent = 'ДОРОГУ ХОРОШЕНЬКО ТРЯХНУЛО! С РОЖДЕСТВОМ!';
+        destroyScreen.style.display = 'flex';
+        const popper = document.getElementById('finalPopper');
+        popper.style.display = 'block';
+        popper.style.animation = 'none';
+        void popper.offsetWidth;
+        popper.style.animation = 'popper-burst 0.75s cubic-bezier(.15,.8,.25,1.4) both';
+        christmasChime();
+        launchChristmasConfetti();
+      }
+    }, 250);
+  }
+
+  function summonUfo() {
+    const ufo = document.createElement('div');
+    ufo.textContent = '🛸';
+    ufo.className = 'ufo';
+    ufo.style.left = '-60px';
+    ufo.style.top = '40px';
+    document.querySelector('.road').appendChild(ufo);
+
+    let uLeft = -60;
+    const uInterval = setInterval(() => {
+      uLeft += 8;
+      ufo.style.left = uLeft + 'px';
+
+      if (uLeft > 500) {
+        clearInterval(uInterval);
+        ufo.remove();
+      }
+    }, 30);
+  }
+
   function airplane() {
     if (busCrashed || isLeaving || destroyScreen.style.display === 'flex') return;
 
@@ -947,6 +1302,19 @@
 
   function resetGame() {
     level = 0;
+    tornadoActive = false;
+    earthquakeActive = false;
+    driftActive = false;
+    const finalPopper = document.getElementById('finalPopper');
+    if (finalPopper) finalPopper.style.display = 'none';
+    document.querySelectorAll('.christmas-confetti').forEach(el => el.remove());
+    document.querySelector('.road').classList.remove('shake');
+    mainBody.classList.remove('shake');
+    const oldTornado = document.querySelector('.tornado');
+    if (oldTornado) oldTornado.remove();
+    busEl.style.display = '';
+    busEl.style.animation = 'bus-idle 0.15s infinite alternate';
+    busEl.style.transform = '';
     busSpeed = 80;
     speedSlider.value = '80';
     speedValue.textContent = '80';
@@ -955,6 +1323,7 @@
     shoutText.style.transform = 'scale(1)';
     isLeaving = false;
     busCrashed = false;
+    stoneHits = 0;
     busFlying = false;
     stopActive = false;
     isAtStop = false;
@@ -970,6 +1339,12 @@
     busEl.style.transform = '';
     busEl.style.transition = '';
     busEl.style.animation = 'bus-idle 0.15s infinite alternate';
+    const crack = document.getElementById('glassCrack');
+    if (crack) {
+      crack.style.opacity = '0';
+      crack.textContent = '💥';
+      crack.style.transform = 'translate(-50%, -50%) scale(1)';
+    }
     dayNightTimer = 0;
     isNight = false;
     document.querySelector('.road').style.backgroundColor = '#2a2a2a';
