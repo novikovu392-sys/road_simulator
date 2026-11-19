@@ -394,6 +394,7 @@
   let isLeaving = false;
   let busCrashed = false;
   let stoneHits = 0;
+  let skatersHitInRow = 0;
   let ufoTimer = 0;
   
   let busFlying = false;
@@ -862,6 +863,7 @@
   }
 
   function skater() {
+    if (busCrashed || destroyScreen.style.display === 'flex') return;
     resetActivity();
     const s = document.createElement('div');
     s.textContent = '🛹🧍‍♂️';
@@ -878,6 +880,22 @@
 
       if (!busCrashed && sLeft >= 340 && sLeft <= 400) {
         clearInterval(sInterval);
+        skatersHitInRow++;
+
+        if (skatersHitInRow >= 10) {
+          busCrashed = true;
+          isLeaving = false;
+          isAtStop = false;
+          shoutText.textContent = '10 СКЕЙТЕРОВ ПОДРЯД!';
+          const lawVoice = new SpeechSynthesisUtterance('Вы нарушили закон об сбитии скейтеров!');
+          lawVoice.rate = 0.85;
+          speechSynthesis.speak(lawVoice);
+          setTimeout(() => {
+            document.getElementById('finalTitle').textContent = 'ВЫ НАРУШИЛИ ЗАКОН ОБ СБИТИИ СКЕЙТЕРОВ!';
+            document.getElementById('finalMessage').textContent = 'ВЫ СБИЛИ 10 СКЕЙТЕРОВ ПОДРЯД. ИГРА ОКОНЧЕНА!';
+            destroyScreen.style.display = 'flex';
+          }, 650);
+        }
 
         try {
           const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1324,6 +1342,7 @@
     isLeaving = false;
     busCrashed = false;
     stoneHits = 0;
+    skatersHitInRow = 0;
     busFlying = false;
     stopActive = false;
     isAtStop = false;
