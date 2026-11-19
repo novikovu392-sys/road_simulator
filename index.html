@@ -542,6 +542,7 @@
 
   function resetActivity() {
     idleTimer = 0;
+    kamazCount = 0;
     if (isLeaving && !busCrashed) {
       isLeaving = false;
       busEl.style.right = '40px';
@@ -821,10 +822,34 @@
   let kamazCount = 0;
 
   function kamaz() {
-    resetActivity();
+    // Нажатие именно кнопки «КАМАЗ» продолжает серию, не сбрасывая счётчик.
+    idleTimer = 0;
+    if (isLeaving && !busCrashed) {
+      isLeaving = false;
+      busEl.style.right = '40px';
+      busEl.style.left = '';
+    }
     kamazCount++;
     if(kamazCount >= 5) {
       document.getElementById('turboBtn').style.display = '';
+    }
+    if (kamazCount >= 30) {
+      // После показа концовки начинаем новую серию с нуля.
+      kamazCount = 0;
+      busCrashed = true;
+      isLeaving = true;
+      busEl.style.animation = 'bus-idle 0.15s infinite alternate';
+      const finalPopper = document.getElementById('finalPopper');
+      finalPopper.textContent = '🚂✨🌈🚂';
+      finalPopper.style.display = 'block';
+      document.getElementById('finalTitle').textContent = '🚂 КРАСИВЫЙ ПАРОВОЗИК! 🚂';
+      document.getElementById('finalMessage').textContent = '30 КАМАЗОВ ПОДРЯД — И ПОЯВИЛСЯ САМЫЙ КРАСИВЫЙ ПАРОВОЗИК!';
+      destroyScreen.style.display = 'flex';
+      const trainVoice = new SpeechSynthesisUtterance('Красивый паровозик! Тридцать КамАЗов подряд!');
+      trainVoice.volume = 1;
+      trainVoice.rate = 0.9;
+      speechSynthesis.speak(trainVoice);
+      return;
     }
     const kamazVoice = new SpeechSynthesisUtterance('КАМАЗ летит вперёд');
     kamazVoice.volume = 1;
@@ -851,8 +876,12 @@
       k.style.top = kTop + 'px';
       k.style.transform = `rotate(${kAngle}deg)`;
 
+      // КамАЗ снова может сбить автобус.
       if (!busCrashed && kLeft >= 340 && kLeft <= 400) {
+        clearInterval(kInterval);
+        k.remove();
         triggerBusCrash();
+        return;
       }
 
       if(kLeft > 480) {
@@ -1343,6 +1372,7 @@
     busCrashed = false;
     stoneHits = 0;
     skatersHitInRow = 0;
+    // Серия нажатий КАМАЗ сохраняется после автоматической перезагрузки дороги.
     busFlying = false;
     stopActive = false;
     isAtStop = false;
